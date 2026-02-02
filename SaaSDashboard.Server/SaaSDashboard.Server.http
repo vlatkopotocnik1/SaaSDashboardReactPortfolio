@@ -1,0 +1,6 @@
+@SaaSDashboard.Server_HostAddress = http://localhost:5064
+
+GET {{SaaSDashboard.Server_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

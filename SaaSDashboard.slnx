@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="saasdashboard.client/saasdashboard.client.esproj">
+    <Build />
+    <Deploy />
+  </Project>
+  <Project Path="SaaSDashboard.Server/SaaSDashboard.Server.csproj" />
+</Solution>
