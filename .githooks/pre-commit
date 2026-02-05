@@ -1,0 +1,27 @@
+#!/usr/bin/env node
+const { spawnSync } = require('node:child_process')
+const path = require('node:path')
+
+const root = path.resolve(__dirname, '..')
+const npmCmd = 'npm'
+
+const run = (command, args) => {
+  const result = spawnSync(command, args, {
+    cwd: root,
+    stdio: 'inherit',
+    shell: process.platform === 'win32',
+  })
+
+  if (result.error) {
+    console.error(result.error.message)
+    process.exit(1)
+  }
+
+  if (result.status !== 0) {
+    process.exit(result.status ?? 1)
+  }
+}
+
+run(npmCmd, ['--prefix', 'saasdashboard.client', 'run', 'format:check'])
+run(npmCmd, ['--prefix', 'saasdashboard.client', 'run', 'lint'])
+run('dotnet', ['build', 'SaaSDashboard.slnx'])
