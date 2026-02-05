@@ -10,6 +10,7 @@ import {
   useLocation,
   useNavigate,
 } from 'react-router-dom';
+import { ThemeProvider, useTheme } from './theme';
 
 type AuthContextValue = {
   isAuthed: boolean;
@@ -102,6 +103,7 @@ function Sidebar() {
 
 function Topbar() {
   const { logout } = useAuth();
+  const { mode, toggleTheme } = useTheme();
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -113,6 +115,9 @@ function Topbar() {
     <header className="topbar">
       <div className="topbar-title">Overview</div>
       <div className="topbar-actions">
+        <button className="ghost-button" type="button" onClick={toggleTheme}>
+          {mode === 'light' ? 'Dark mode' : 'Light mode'}
+        </button>
         <button className="ghost-button" type="button">
           Notifications
         </button>
@@ -228,21 +233,23 @@ function NotFoundPage() {
 
 function App() {
   return (
-    <AuthProvider>
-      <Routes>
-        <Route element={<RequireAuth />}>
-          <Route element={<AppLayout />}>
-            <Route index element={<DashboardPage />} />
-            <Route path="users" element={<UsersPage />} />
-            <Route path="settings" element={<SettingsPage />} />
+    <ThemeProvider>
+      <AuthProvider>
+        <Routes>
+          <Route element={<RequireAuth />}>
+            <Route element={<AppLayout />}>
+              <Route index element={<DashboardPage />} />
+              <Route path="users" element={<UsersPage />} />
+              <Route path="settings" element={<SettingsPage />} />
+            </Route>
           </Route>
-        </Route>
-        <Route element={<PublicLayout />}>
-          <Route path="login" element={<LoginPage />} />
-        </Route>
-        <Route path="*" element={<NotFoundPage />} />
-      </Routes>
-    </AuthProvider>
+          <Route element={<PublicLayout />}>
+            <Route path="login" element={<LoginPage />} />
+          </Route>
+          <Route path="*" element={<NotFoundPage />} />
+        </Routes>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }
 

@@ -1,13 +1,12 @@
+@import './styles/tokens.css';
+@import './components/ui/ui.css';
+
 :root {
-  font-family:
-    'Inter',
-    system-ui,
-    -apple-system,
-    sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
-  color: #0f172a;
-  background-color: #f6f7fb;
+  font-family: var(--font-sans);
+  line-height: var(--line-height-base);
+  font-weight: var(--font-weight-regular);
+  color: var(--color-text);
+  background-color: var(--color-bg);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -23,6 +22,8 @@
 body {
   margin: 0;
   min-height: 100vh;
+  background: var(--color-bg);
+  color: var(--color-text);
 }
 
 a {
