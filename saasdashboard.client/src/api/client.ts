@@ -1,3 +1,5 @@
+import { getAccessToken, refreshSession } from '../auth/session';
+
 export class ApiError extends Error {
   status: number;
   payload?: unknown;
@@ -14,6 +16,7 @@ type RequestOptions = Omit<RequestInit, 'body'> & {
   body?: unknown;
   retry?: number;
   retryDelayMs?: number;
+  retryAuth?: boolean;
 };
 
 const DEFAULT_RETRY = 2;
@@ -32,19 +35,35 @@ const shouldRetry = (status?: number) => {
 };
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}) {
-  const { retry = DEFAULT_RETRY, retryDelayMs = DEFAULT_RETRY_DELAY_MS, headers, body, ...rest } = options;
+  const {
+    retry = DEFAULT_RETRY,
+    retryDelayMs = DEFAULT_RETRY_DELAY_MS,
+    headers,
+    body,
+    retryAuth = true,
+    ...rest
+  } = options;
   const url = `${getBaseUrl()}${path.startsWith('/') ? path : `/${path}`}`;
 
   for (let attempt = 0; attempt <= retry; attempt += 1) {
     try {
+      const accessToken = getAccessToken();
       const response = await fetch(url, {
         ...rest,
         headers: {
           'Content-Type': 'application/json',
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
           ...headers,
         },
         body: body ? JSON.stringify(body) : undefined,
       });
+
+      if (response.status === 401 && retryAuth) {
+        const refreshed = await refreshSession();
+        if (refreshed) {
+          return apiRequest<T>(path, { ...options, retryAuth: false });
+        }
+      }
 
       if (!response.ok) {
         const payload = await response.json().catch(() => undefined);

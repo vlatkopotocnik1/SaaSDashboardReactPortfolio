@@ -1,5 +1,5 @@
 import './App.css';
-import { createContext, useContext, useMemo, useState, type PropsWithChildren } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState, type PropsWithChildren } from 'react';
 import {
   Link,
   NavLink,
@@ -11,31 +11,59 @@ import {
   useNavigate,
 } from 'react-router-dom';
 import { ThemeProvider, useTheme } from './theme';
+import { login as loginApi, logout as logoutApi } from './auth/api';
+import { getRefreshToken, getSessionUser, onSessionChange, refreshSession } from './auth/session';
+
+type AuthUser = {
+  username: string;
+  role: 'Admin' | 'User';
+};
 
 type AuthContextValue = {
   isAuthed: boolean;
-  login: () => void;
-  logout: () => void;
+  isLoading: boolean;
+  user: AuthUser | null;
+  login: (username: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 function AuthProvider({ children }: PropsWithChildren) {
-  const [isAuthed, setIsAuthed] = useState(() => localStorage.getItem('demo_auth') === 'true');
+  const [user, setUser] = useState<AuthUser | null>(() => getSessionUser());
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const hydrateSession = async () => {
+      if (getRefreshToken()) {
+        await refreshSession();
+        setUser(getSessionUser());
+      }
+      setIsLoading(false);
+    };
+
+    hydrateSession();
+  }, []);
+
+  useEffect(() => {
+    return onSessionChange(() => setUser(getSessionUser()));
+  }, []);
 
   const value = useMemo<AuthContextValue>(() => {
     return {
-      isAuthed,
-      login: () => {
-        localStorage.setItem('demo_auth', 'true');
-        setIsAuthed(true);
+      isAuthed: Boolean(user),
+      isLoading,
+      user,
+      login: async (username, password) => {
+        const nextUser = await loginApi(username, password);
+        setUser(nextUser);
       },
-      logout: () => {
-        localStorage.removeItem('demo_auth');
-        setIsAuthed(false);
+      logout: async () => {
+        await logoutApi(getRefreshToken());
+        setUser(null);
       },
     };
-  }, [isAuthed]);
+  }, [isLoading, user]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
@@ -87,15 +115,24 @@ function Breadcrumbs() {
 }
 
 function Sidebar() {
+  const { user } = useAuth();
+  const items = [
+    { to: '/', label: 'Dashboard' },
+    { to: '/users', label: 'Users', roles: ['Admin'] },
+    { to: '/settings', label: 'Settings' },
+  ];
+
   return (
     <aside className="sidebar">
       <div className="sidebar-brand">SaaS Dashboard</div>
       <nav className="sidebar-nav">
-        <NavLink to="/" end>
-          Dashboard
-        </NavLink>
-        <NavLink to="/users">Users</NavLink>
-        <NavLink to="/settings">Settings</NavLink>
+        {items
+          .filter((item) => !item.roles || (user && item.roles.includes(user.role)))
+          .map((item) => (
+            <NavLink key={item.to} to={item.to} end={item.to === '/'}>
+              {item.label}
+            </NavLink>
+          ))}
       </nav>
     </aside>
   );
@@ -106,9 +143,12 @@ function Topbar() {
   const { mode, toggleTheme } = useTheme();
   const navigate = useNavigate();
 
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } finally {
+      navigate('/login');
+    }
   };
 
   return (
@@ -158,11 +198,29 @@ function PublicLayout() {
 }
 
 function RequireAuth() {
-  const { isAuthed } = useAuth();
+  const { isAuthed, isLoading } = useAuth();
   const location = useLocation();
+
+  if (isLoading) {
+    return (
+      <section className="page">
+        <p>Loading session…</p>
+      </section>
+    );
+  }
 
   if (!isAuthed) {
     return <Navigate to="/login" replace state={{ from: location }} />;
+  }
+
+  return <Outlet />;
+}
+
+function RequireRole({ roles }: { roles: AuthUser['role'][] }) {
+  const { user } = useAuth();
+
+  if (!user || !roles.includes(user.role)) {
+    return <Navigate to="/" replace />;
   }
 
   return <Outlet />;
@@ -201,23 +259,49 @@ function LoginPage() {
   const location = useLocation();
   const state = location.state as { from?: { pathname?: string } } | null;
   const fallbackPath = state?.from?.pathname ?? '/';
+  const [error, setError] = useState<string | null>(null);
 
   if (isAuthed) {
     return <Navigate to={fallbackPath} replace />;
   }
 
-  const handleLogin = () => {
-    login();
-    navigate(fallbackPath, { replace: true });
+  const handleLogin = async (username: string, password: string) => {
+    setError(null);
+    try {
+      await login(username, password);
+      navigate(fallbackPath, { replace: true });
+    } catch {
+      setError('Login failed. Check credentials and try again.');
+    }
   };
 
   return (
     <section className="page">
       <h1>Login</h1>
       <p>Sign in to access your dashboard.</p>
-      <button className="primary-button" onClick={handleLogin} type="button">
-        Continue
-      </button>
+      <form
+        className="login-form"
+        onSubmit={(event) => {
+          event.preventDefault();
+          const formData = new FormData(event.currentTarget);
+          const username = String(formData.get('username') ?? '');
+          const password = String(formData.get('password') ?? '');
+          handleLogin(username, password);
+        }}
+      >
+        <label className="login-field">
+          <span>Username</span>
+          <input name="username" placeholder="admin or user" required />
+        </label>
+        <label className="login-field">
+          <span>Password</span>
+          <input name="password" type="password" placeholder="•••••••" required />
+        </label>
+        <button className="primary-button" type="submit">
+          Continue
+        </button>
+      </form>
+      {error ? <p className="form-error">{error}</p> : null}
     </section>
   );
 }
@@ -239,7 +323,9 @@ function App() {
           <Route element={<RequireAuth />}>
             <Route element={<AppLayout />}>
               <Route index element={<DashboardPage />} />
-              <Route path="users" element={<UsersPage />} />
+              <Route element={<RequireRole roles={['Admin']} />}>
+                <Route path="users" element={<UsersPage />} />
+              </Route>
               <Route path="settings" element={<SettingsPage />} />
             </Route>
           </Route>

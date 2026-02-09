@@ -4,4 +4,5 @@
     <Deploy />
   </Project>
   <Project Path="SaaSDashboard.Server/SaaSDashboard.Server.csproj" />
+  <Project Path="SaaSDashboard.Server.Tests/SaaSDashboard.Server.Tests.csproj" />
 </Solution>
