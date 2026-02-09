@@ -8,10 +8,11 @@ type SelectOption = {
 type SelectProps = SelectHTMLAttributes<HTMLSelectElement> & {
   label?: string;
   helperText?: string;
+  error?: string;
   options: SelectOption[];
 };
 
-export function Select({ label, helperText, options, className, ...props }: SelectProps) {
+export function Select({ label, helperText, error, options, className, ...props }: SelectProps) {
   return (
     <label className={['ui-field', className].filter(Boolean).join(' ')}>
       {label ? <span className="ui-label">{label}</span> : null}
@@ -22,6 +23,7 @@ export function Select({ label, helperText, options, className, ...props }: Sele
           </option>
         ))}
       </select>
+      {error ? <span className="ui-error">{error}</span> : null}
       {helperText ? <span className="ui-helper">{helperText}</span> : null}
     </label>
   );
