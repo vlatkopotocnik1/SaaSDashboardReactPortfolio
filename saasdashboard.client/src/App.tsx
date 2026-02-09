@@ -15,6 +15,7 @@ import { login as loginApi, logout as logoutApi } from './auth/api';
 import { getRefreshToken, getSessionUser, onSessionChange, refreshSession } from './auth/session';
 import { UsersPage } from './users/UsersPage';
 import { OrganizationsPage } from './organizations/OrganizationsPage';
+import { RolesPage } from './roles/RolesPage';
 
 type AuthUser = {
   username: string;
@@ -82,6 +83,7 @@ const routeLabels: Record<string, string> = {
   '/': 'Dashboard',
   '/users': 'Users',
   '/organizations': 'Organizations',
+  '/roles': 'Roles',
   '/settings': 'Settings',
   '/login': 'Login',
 };
@@ -123,6 +125,7 @@ function Sidebar() {
     { to: '/', label: 'Dashboard' },
     { to: '/users', label: 'Users', roles: ['Admin'] },
     { to: '/organizations', label: 'Organizations', roles: ['Admin'] },
+    { to: '/roles', label: 'Roles', roles: ['Admin'] },
     { to: '/settings', label: 'Settings' },
   ];
 
@@ -321,6 +324,7 @@ function App() {
               <Route element={<RequireRole roles={['Admin']} />}>
                 <Route path="users" element={<UsersPage />} />
                 <Route path="organizations" element={<OrganizationsPage />} />
+                <Route path="roles" element={<RolesPage />} />
               </Route>
               <Route path="settings" element={<SettingsPage />} />
             </Route>

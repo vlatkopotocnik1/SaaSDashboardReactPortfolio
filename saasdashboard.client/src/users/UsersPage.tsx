@@ -9,12 +9,9 @@ import { createUser, deleteUser, getUsers, updateUser } from './api';
 import type { User, UserRole } from './types';
 import { getOrganizations } from '../organizations/api';
 import type { Organization } from '../organizations/types';
+import { getRoles } from '../roles/api';
 
-const roleOptions = [
-  { label: 'All roles', value: 'all' },
-  { label: 'Admin', value: 'Admin' },
-  { label: 'User', value: 'User' },
-];
+const roleOptionsDefault = [{ label: 'All roles', value: 'all' }];
 
 const pageSizeOptions = [
   { label: '10 / page', value: '10' },
@@ -29,7 +26,7 @@ const usernameSchema = z
   .max(32, 'Username must be at most 32 characters.')
   .regex(/^[a-zA-Z0-9._-]+$/, 'Use letters, numbers, dots, dashes, or underscores.');
 
-const roleSchema = z.enum(['Admin', 'User']);
+const roleSchema = z.string().min(1, 'Role is required.');
 const organizationSchema = z.string().min(1, 'Organization is required.');
 const teamSchema = z.string().min(1, 'Team is required.');
 
@@ -122,6 +119,7 @@ function UserForm({ mode, defaultValues, isSaving, formError, organizations, onS
       <Select
         label="Role"
         options={roleOptions.filter((option) => option.value !== 'all')}
+        error={errors.role?.message}
         {...register('role')}
       />
       <Select
@@ -168,7 +166,7 @@ export function UsersPage() {
   const queryClient = useQueryClient();
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
-  const [roleFilter, setRoleFilter] = useState<'all' | UserRole>('all');
+  const [roleFilter, setRoleFilter] = useState<'all' | string>('all');
   const [organizationFilter, setOrganizationFilter] = useState<'all' | string>('all');
   const [teamFilter, setTeamFilter] = useState<'all' | string>('all');
   const [page, setPage] = useState(1);
@@ -183,20 +181,26 @@ export function UsersPage() {
     queryKey: ['organizations', 'withTeams'],
     queryFn: () => getOrganizations(true),
   });
+  const rolesQuery = useQuery({
+    queryKey: ['roles'],
+    queryFn: getRoles,
+  });
 
   const organizations = organizationsQuery.data ?? [];
+  const roles = rolesQuery.data ?? [];
   const defaultOrganizationId = organizations[0]?.id ?? '';
   const defaultTeamId = organizations[0]?.teams?.[0]?.id ?? '';
+  const defaultRoleName = roles[0]?.name ?? 'User';
 
   const createDefaultValues = useMemo<UserFormValues>(
     () => ({
       username: '',
-      role: 'User',
+      role: defaultRoleName,
       organizationId: defaultOrganizationId,
       teamId: defaultTeamId,
       password: '',
     }),
-    [defaultOrganizationId, defaultTeamId],
+    [defaultOrganizationId, defaultTeamId, defaultRoleName],
   );
   const editDefaultValues = useMemo<UserFormValues | null>(() => {
     if (!editingUser) return null;
@@ -237,6 +241,11 @@ export function UsersPage() {
     const teams = org?.teams?.map((team) => ({ label: team.name, value: team.id })) ?? [];
     return [{ label: 'All teams', value: 'all' }, ...teams];
   }, [organizationFilter, organizations]);
+
+  const roleOptions = useMemo(() => {
+    const roleItems = roles.map((role) => ({ label: role.name, value: role.name }));
+    return [...roleOptionsDefault, ...roleItems];
+  }, [roles]);
 
   useEffect(() => {
     if (teamFilter === 'all') return;
@@ -404,7 +413,7 @@ export function UsersPage() {
           label="Role"
           value={roleFilter}
           options={roleOptions}
-          onChange={(event) => setRoleFilter(event.target.value as 'all' | UserRole)}
+          onChange={(event) => setRoleFilter(event.target.value)}
         />
         <Select
           label="Organization"

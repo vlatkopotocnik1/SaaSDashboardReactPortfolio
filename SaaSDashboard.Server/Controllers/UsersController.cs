@@ -108,6 +108,12 @@ public class UsersController : ControllerBase
             return BadRequest(new { message = validationError });
         }
 
+        var roleValidation = await ValidateRoleAsync(request.Role);
+        if (roleValidation is not null)
+        {
+            return BadRequest(new { message = roleValidation });
+        }
+
         var normalized = request.Username.Trim().ToLower();
         var exists = await _dbContext.Users.AnyAsync(user => user.Username.ToLower() == normalized);
         if (exists)
@@ -161,6 +167,12 @@ public class UsersController : ControllerBase
         if (validationError is not null)
         {
             return BadRequest(new { message = validationError });
+        }
+
+        var roleValidation = await ValidateRoleAsync(request.Role);
+        if (roleValidation is not null)
+        {
+            return BadRequest(new { message = roleValidation });
         }
 
         var user = await _dbContext.Users.SingleOrDefaultAsync(item => item.Id == id);
@@ -285,6 +297,17 @@ public class UsersController : ControllerBase
         if (!teamExists)
         {
             return "Team not found for organization.";
+        }
+
+        return null;
+    }
+
+    private async Task<string?> ValidateRoleAsync(string role)
+    {
+        var exists = await _dbContext.Roles.AnyAsync(item => item.Name == role);
+        if (!exists)
+        {
+            return "Role not found.";
         }
 
         return null;
