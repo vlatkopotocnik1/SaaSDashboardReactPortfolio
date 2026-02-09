@@ -60,11 +60,12 @@ type UserFormProps = {
   defaultValues: UserFormValues;
   isSaving: boolean;
   formError?: string | null;
+  roleOptions: { label: string; value: string }[];
   organizations: Organization[];
   onSubmit: (values: UserFormValues) => void;
 };
 
-function UserForm({ mode, defaultValues, isSaving, formError, organizations, onSubmit }: UserFormProps) {
+function UserForm({ mode, defaultValues, isSaving, formError, roleOptions, organizations, onSubmit }: UserFormProps) {
   const schema = mode === 'create' ? createSchema : editSchema;
   const formId = `user-form-${mode}`;
   const {
@@ -483,6 +484,7 @@ export function UsersPage() {
           isSaving={createMutation.isPending}
           formError={createError}
           defaultValues={createDefaultValues}
+          roleOptions={roleOptions}
           organizations={organizations}
           onSubmit={async (values) => {
             setCreateError(null);
@@ -510,6 +512,7 @@ export function UsersPage() {
             isSaving={updateMutation.isPending}
             formError={updateError}
             defaultValues={editDefaultValues ?? createDefaultValues}
+            roleOptions={roleOptions}
             organizations={organizations}
             onSubmit={async (values) => {
               setUpdateError(null);

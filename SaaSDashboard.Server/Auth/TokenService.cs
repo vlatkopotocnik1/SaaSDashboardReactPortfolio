@@ -23,7 +23,8 @@ public class TokenService
         {
             new(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
             new("username", user.Username),
-            new("role", user.Role)
+            new("role", user.Role),
+            new("orgId", user.OrganizationId.ToString())
         };
 
         var credentials = new SigningCredentials(_signingKey, SecurityAlgorithms.HmacSha256);

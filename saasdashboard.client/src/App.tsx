@@ -16,6 +16,7 @@ import { getRefreshToken, getSessionUser, onSessionChange, refreshSession } from
 import { UsersPage } from './users/UsersPage';
 import { OrganizationsPage } from './organizations/OrganizationsPage';
 import { RolesPage } from './roles/RolesPage';
+import { BillingPage } from './billing/BillingPage';
 
 type AuthUser = {
   username: string;
@@ -84,6 +85,7 @@ const routeLabels: Record<string, string> = {
   '/users': 'Users',
   '/organizations': 'Organizations',
   '/roles': 'Roles',
+  '/billing': 'Billing',
   '/settings': 'Settings',
   '/login': 'Login',
 };
@@ -126,6 +128,7 @@ function Sidebar() {
     { to: '/users', label: 'Users', roles: ['Admin'] },
     { to: '/organizations', label: 'Organizations', roles: ['Admin'] },
     { to: '/roles', label: 'Roles', roles: ['Admin'] },
+    { to: '/billing', label: 'Billing' },
     { to: '/settings', label: 'Settings' },
   ];
 
@@ -326,6 +329,7 @@ function App() {
                 <Route path="organizations" element={<OrganizationsPage />} />
                 <Route path="roles" element={<RolesPage />} />
               </Route>
+              <Route path="billing" element={<BillingPage />} />
               <Route path="settings" element={<SettingsPage />} />
             </Route>
           </Route>

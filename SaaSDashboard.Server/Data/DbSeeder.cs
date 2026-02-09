@@ -19,9 +19,139 @@ public static class DbSeeder
         var platformTeam = await EnsureTeamAsync(dbContext, org, "Platform");
         var salesTeam = await EnsureTeamAsync(dbContext, org, "Sales");
 
+        var plans = await EnsurePlansAsync(dbContext);
+        await EnsureSubscriptionAsync(dbContext, org, plans);
+        await EnsurePaymentMethodsAsync(dbContext, org);
+        await EnsureInvoicesAsync(dbContext, org);
+
         await EnsureUserAsync(dbContext, hasher, "admin", adminRole.Name, "admin", org, platformTeam);
         await EnsureUserAsync(dbContext, hasher, "user", userRole.Name, "user", org, salesTeam);
         await dbContext.SaveChangesAsync();
+    }
+
+    private static async Task<List<Plan>> EnsurePlansAsync(AppDbContext dbContext)
+    {
+        var plans = new List<Plan>
+        {
+            new() { Name = "Starter", Description = "For small teams getting started.", PriceMonthly = 29, PriceYearly = 290, IsPopular = false },
+            new() { Name = "Growth", Description = "For scaling product teams.", PriceMonthly = 79, PriceYearly = 790, IsPopular = true },
+            new() { Name = "Enterprise", Description = "For regulated or large orgs.", PriceMonthly = 199, PriceYearly = 1990, IsPopular = false }
+        };
+
+        var resolved = new List<Plan>();
+
+        foreach (var plan in plans)
+        {
+            var existing = await dbContext.Plans.FirstOrDefaultAsync(item => item.Name == plan.Name);
+            if (existing is null)
+            {
+                dbContext.Plans.Add(plan);
+                resolved.Add(plan);
+            }
+            else
+            {
+                existing.Description = plan.Description;
+                existing.PriceMonthly = plan.PriceMonthly;
+                existing.PriceYearly = plan.PriceYearly;
+                existing.IsPopular = plan.IsPopular;
+                resolved.Add(existing);
+            }
+        }
+
+        return resolved;
+    }
+
+    private static async Task EnsureSubscriptionAsync(AppDbContext dbContext, Organization org, List<Plan> plans)
+    {
+        var plan = plans.FirstOrDefault(item => item.Name == "Growth") ?? plans.First();
+        var subscription = await dbContext.Subscriptions
+            .Include(item => item.Plan)
+            .FirstOrDefaultAsync(item => item.OrganizationId == org.Id);
+
+        if (subscription is null)
+        {
+            subscription = new Subscription
+            {
+                OrganizationId = org.Id,
+                PlanId = plan.Id
+            };
+            dbContext.Subscriptions.Add(subscription);
+        }
+
+        subscription.PlanId = plan.Id;
+        subscription.Status = "Active";
+        subscription.BillingCycle = "Monthly";
+        subscription.CurrentPeriodStart = DateTimeOffset.UtcNow.AddDays(-10);
+        subscription.CurrentPeriodEnd = DateTimeOffset.UtcNow.AddDays(20);
+        subscription.CancelAtPeriodEnd = false;
+        subscription.SeatsUsed = 12;
+        subscription.SeatsLimit = 20;
+        subscription.StorageUsedGb = 45;
+        subscription.StorageLimitGb = 100;
+        subscription.ApiCallsUsed = 18000;
+        subscription.ApiCallsLimit = 50000;
+    }
+
+    private static async Task EnsurePaymentMethodsAsync(AppDbContext dbContext, Organization org)
+    {
+        var existing = await dbContext.PaymentMethods
+            .Where(item => item.OrganizationId == org.Id)
+            .ToListAsync();
+
+        if (existing.Count == 0)
+        {
+            dbContext.PaymentMethods.AddRange(
+                new PaymentMethod
+                {
+                    OrganizationId = org.Id,
+                    Brand = "Visa",
+                    Last4 = "4242",
+                    ExpMonth = 11,
+                    ExpYear = DateTimeOffset.UtcNow.Year + 2,
+                    IsDefault = true
+                },
+                new PaymentMethod
+                {
+                    OrganizationId = org.Id,
+                    Brand = "Mastercard",
+                    Last4 = "4444",
+                    ExpMonth = 5,
+                    ExpYear = DateTimeOffset.UtcNow.Year + 3,
+                    IsDefault = false
+                });
+        }
+    }
+
+    private static async Task EnsureInvoicesAsync(AppDbContext dbContext, Organization org)
+    {
+        var existing = await dbContext.Invoices.AnyAsync(item => item.OrganizationId == org.Id);
+        if (existing)
+        {
+            return;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var invoices = new List<Invoice>();
+        for (var i = 0; i < 3; i++)
+        {
+            var periodEnd = now.AddMonths(-i);
+            var periodStart = periodEnd.AddMonths(-1);
+            invoices.Add(new Invoice
+            {
+                OrganizationId = org.Id,
+                Number = $"INV-{periodEnd:yyyyMM}-ACME",
+                IssuedAt = periodEnd.AddDays(-2),
+                DueAt = periodEnd.AddDays(5),
+                PaidAt = periodEnd.AddDays(1),
+                Amount = 79,
+                Currency = "USD",
+                Status = "Paid",
+                PeriodStart = periodStart,
+                PeriodEnd = periodEnd
+            });
+        }
+
+        dbContext.Invoices.AddRange(invoices);
     }
 
     private static async Task<List<Permission>> EnsurePermissionsAsync(AppDbContext dbContext)
