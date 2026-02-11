@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError } from '../api/client';
-import { Button, Input, Toast } from '../components/ui';
+import { Button, Input, Modal, Toast } from '../components/ui';
 import { createRole, deleteRole, getPermissions, getRoles, updateRole } from './api';
 import type { Permission, Role } from './types';
 
@@ -20,10 +20,12 @@ export function RolesPage() {
   const queryClient = useQueryClient();
   const [selectedRoleId, setSelectedRoleId] = useState<string | null>(null);
   const [isCreatingRole, setIsCreatingRole] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [roleName, setRoleName] = useState('');
   const [roleDescription, setRoleDescription] = useState('');
   const [rolePermissions, setRolePermissions] = useState<string[]>([]);
   const [roleError, setRoleError] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const rolesQuery = useQuery({ queryKey: ['roles'], queryFn: getRoles });
   const permissionsQuery = useQuery({ queryKey: ['permissions'], queryFn: getPermissions });
@@ -33,10 +35,10 @@ export function RolesPage() {
   const selectedRole = roles.find((role) => role.id === selectedRoleId) ?? null;
 
   useEffect(() => {
-    if (!selectedRoleId && roles.length > 0) {
+    if (!selectedRoleId && roles.length > 0 && !isCreatingRole) {
       setSelectedRoleId(roles[0].id);
     }
-  }, [roles, selectedRoleId]);
+  }, [roles, selectedRoleId, isCreatingRole]);
 
   useEffect(() => {
     if (!selectedRole) return;
@@ -64,10 +66,16 @@ export function RolesPage() {
 
   const createMutation = useMutation({
     mutationFn: createRole,
-    onSuccess: (role) => {
-      queryClient.invalidateQueries({ queryKey: ['roles'] });
-      setSelectedRoleId(role.id);
+    onSuccess: async (role, variables) => {
+      await queryClient.refetchQueries({ queryKey: ['roles'] });
+      const rolesData = queryClient.getQueryData<Role[]>(['roles']) ?? [];
+      const match =
+        role?.id ??
+        rolesData.find((item) => item.name.trim().toLowerCase() === variables.name.trim().toLowerCase())?.id ??
+        null;
+      setSelectedRoleId(match);
       setIsCreatingRole(false);
+      setIsModalOpen(false);
     },
     onError: (error) => setRoleError(parseError(error)),
   });
@@ -75,8 +83,9 @@ export function RolesPage() {
   const updateMutation = useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: { name: string; description: string; permissionKeys: string[] } }) =>
       updateRole(id, payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['roles'] });
+    onSuccess: async () => {
+      await queryClient.refetchQueries({ queryKey: ['roles'] });
+      setIsModalOpen(false);
     },
     onError: (error) => setRoleError(parseError(error)),
   });
@@ -87,6 +96,7 @@ export function RolesPage() {
       queryClient.invalidateQueries({ queryKey: ['roles'] });
       setSelectedRoleId(null);
       setIsCreatingRole(false);
+      setIsModalOpen(false);
     },
     onError: (error) => setRoleError(parseError(error)),
   });
@@ -108,11 +118,13 @@ export function RolesPage() {
           type="button"
           onClick={() => {
             setRoleError(null);
+            setToastMessage(null);
             setRoleName('');
             setRoleDescription('');
             setRolePermissions([]);
             setSelectedRoleId(null);
             setIsCreatingRole(true);
+            setIsModalOpen(true);
           }}
         >
           New role
@@ -128,123 +140,158 @@ export function RolesPage() {
       <div className="roles-layout">
         <div className="roles-list">
           {roles.map((role) => (
-            <button
+            <div
               key={role.id}
-              type="button"
-              className={['role-item', role.id === selectedRoleId ? 'role-item--active' : '']
+              className={['role-item-row', role.id === selectedRoleId ? 'role-item-row--active' : '']
                 .filter(Boolean)
                 .join(' ')}
-              onClick={() => {
-                setIsCreatingRole(false);
-                setSelectedRoleId(role.id);
-              }}
             >
-              <div className="role-item-title">{role.name}</div>
-              <div className="role-item-meta">{role.permissionKeys.length} permissions</div>
-            </button>
+              <button
+                type="button"
+                className="role-item"
+                onClick={() => {
+                  setRoleError(null);
+                  setToastMessage(null);
+                  setIsCreatingRole(false);
+                  setSelectedRoleId(role.id);
+                  setIsModalOpen(true);
+                }}
+              >
+                <div className="role-item-title">{role.name}</div>
+                <div className="role-item-meta">{role.permissionKeys.length} permissions</div>
+              </button>
+              <div className="role-item-actions">
+                <Button
+                  variant="ghost"
+                  type="button"
+                  disabled={deleteMutation.isPending}
+                  onClick={() => {
+                    if (deleteMutation.isPending) return;
+                    const confirmed = window.confirm(`Delete ${role.name}?`);
+                    if (confirmed) {
+                      deleteMutation.mutate(role.id);
+                    }
+                  }}
+                >
+                  Delete
+                </Button>
+              </div>
+            </div>
           ))}
           {roles.length === 0 ? <div className="role-empty">No roles yet.</div> : null}
         </div>
 
-        <div className="roles-detail">
-          {selectedRole || isCreatingRole ? (
-            <>
-              <div className="role-detail-header">
-                <div>
-                  <h2>{selectedRole ? 'Edit role' : 'New role'}</h2>
-                  <p>{selectedRole ? 'Update permissions and role details.' : 'Define a new role.'}</p>
-                </div>
-                <div className="role-detail-actions">
-                  {selectedRole ? (
-                    <Button
-                      variant="ghost"
-                      type="button"
-                      onClick={() => {
-                        const confirmed = window.confirm(`Delete ${selectedRole.name}?`);
-                        if (confirmed) {
-                          deleteMutation.mutate(selectedRole.id);
-                        }
-                      }}
-                    >
-                      Delete
-                    </Button>
-                  ) : null}
-                </div>
-              </div>
+        <div className="roles-detail" />
+      </div>
+      <Modal
+        isOpen={isModalOpen}
+        title={selectedRole ? 'Edit role' : 'New role'}
+        onClose={() => {
+          if (createMutation.isPending || updateMutation.isPending || deleteMutation.isPending) return;
+          setIsModalOpen(false);
+          setIsCreatingRole(false);
+          setRoleError(null);
+        }}
+      >
+        <div className="role-detail-header">
+          <div>
+            <h2>{selectedRole ? 'Edit role' : 'New role'}</h2>
+            <p>{selectedRole ? 'Update permissions and role details.' : 'Define a new role.'}</p>
+          </div>
+        </div>
 
-              <div className="role-form-inline">
-                <Input
-                  label="Role name"
-                  value={roleName}
-                  onChange={(event) => setRoleName(event.target.value)}
-                  error={roleError ?? undefined}
-                />
-                <Input
-                  label="Description"
-                  value={roleDescription}
-                  onChange={(event) => setRoleDescription(event.target.value)}
-                />
-              </div>
+        <div className="role-form-inline">
+          <Input
+            label="Role name"
+            value={roleName}
+            onChange={(event) => setRoleName(event.target.value)}
+            error={roleError === 'Select at least one permission.' ? undefined : roleError ?? undefined}
+          />
+          <Input
+            label="Description"
+            value={roleDescription}
+            onChange={(event) => setRoleDescription(event.target.value)}
+          />
+        </div>
 
-              {permissionsQuery.isError ? (
-                <Toast title="Unable to load permissions" variant="error">
-                  <span>{parseError(permissionsQuery.error)}</span>
-                </Toast>
-              ) : null}
+        {permissionsQuery.isError ? (
+          <Toast title="Unable to load permissions" variant="error">
+            <span>{parseError(permissionsQuery.error)}</span>
+          </Toast>
+        ) : null}
 
-              <div className="permissions-matrix">
-                {groupedPermissions.map((group) => (
-                  <div key={group.group} className="permissions-group">
-                    <div className="permissions-group-title">{group.group}</div>
-                    <div className="permissions-grid">
-                      {group.items.map((permission) => (
-                        <label key={permission.key} className="permission-row">
-                          <div className="permission-name">
-                            {permission.label}
-                            <span className="permission-info" title={permission.description}>
-                              i
-                            </span>
-                          </div>
-                          <input
-                            type="checkbox"
-                            checked={rolePermissions.includes(permission.key)}
-                            onChange={() => togglePermission(permission.key)}
-                          />
-                        </label>
-                      ))}
+        <div className="permissions-matrix">
+          {groupedPermissions.map((group) => (
+            <div key={group.group} className="permissions-group">
+              <div className="permissions-group-title">{group.group}</div>
+              <div className="permissions-grid">
+                {group.items.map((permission) => (
+                  <label key={permission.key} className="permission-row">
+                    <div className="permission-name">
+                      {permission.label}
+                      <span className="permission-info" title={permission.description}>
+                        i
+                      </span>
                     </div>
-                  </div>
+                    <input
+                      type="checkbox"
+                      checked={rolePermissions.includes(permission.key)}
+                      onChange={() => togglePermission(permission.key)}
+                    />
+                  </label>
                 ))}
               </div>
-
-              <div className="role-save">
-                <Button
-                  type="button"
-                  disabled={!roleName.trim() || rolePermissions.length === 0}
-                  onClick={() => {
-                    setRoleError(null);
-                    const payload = {
-                      name: roleName.trim(),
-                      description: roleDescription.trim(),
-                      permissionKeys: rolePermissions,
-                    };
-                    if (selectedRole) {
-                      updateMutation.mutate({ id: selectedRole.id, payload });
-                      return;
-                    }
-                    createMutation.mutate(payload);
-                  }}
-                >
-                  {selectedRole ? 'Save changes' : 'Create role'}
-                </Button>
-                {roleError ? <span className="form-error">{roleError}</span> : null}
-              </div>
-            </>
-          ) : (
-            <div className="role-empty">Select a role to edit permissions.</div>
-          )}
+            </div>
+          ))}
         </div>
-      </div>
+
+        <div className="role-save">
+          <Button
+            type="button"
+            disabled={
+              !roleName.trim() ||
+              createMutation.isPending ||
+              updateMutation.isPending
+            }
+            onClick={async () => {
+              setRoleError(null);
+              setToastMessage(null);
+              if (rolePermissions.length === 0) {
+                setRoleError('Select at least one permission.');
+                return;
+              }
+              const payload = {
+                name: roleName.trim(),
+                description: roleDescription.trim(),
+                permissionKeys: rolePermissions,
+              };
+              try {
+                if (selectedRole) {
+                  await updateMutation.mutateAsync({ id: selectedRole.id, payload });
+                  setToastMessage('Role updated.');
+                  return;
+                }
+                await createMutation.mutateAsync(payload);
+                setToastMessage('Role created.');
+              } catch (error) {
+                setRoleError(parseError(error));
+              }
+            }}
+          >
+            {createMutation.isPending || updateMutation.isPending
+              ? 'Saving…'
+              : selectedRole
+                ? 'Save changes'
+                : 'Create role'}
+          </Button>
+          {roleError ? <span className="form-error">{roleError}</span> : null}
+        </div>
+      </Modal>
+      {toastMessage ? (
+        <Toast title="Success" onClose={() => setToastMessage(null)}>
+          <span>{toastMessage}</span>
+        </Toast>
+      ) : null}
     </section>
   );
 }

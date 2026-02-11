@@ -1,10 +1,12 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError } from '../api/client';
 import { Button, Input, Modal, Select, Table, Toast } from '../components/ui';
 import { addPaymentMethod, getBillingSummary, getInvoices, getPaymentMethods, getPlans, updateSubscription } from './api';
 import type { Invoice, PaymentMethod } from './types';
-import { getAccessToken } from '../auth/session';
+import { getAccessToken, getSessionUser } from '../auth/session';
+import { getOrganizations } from '../organizations/api';
+import type { Organization } from '../organizations/types';
 
 const billingCycleOptions = [
   { label: 'Monthly billing', value: 'Monthly' },
@@ -36,6 +38,8 @@ const formatUsage = (used: number, limit: number) => `${used.toLocaleString()} /
 
 export function BillingPage() {
   const queryClient = useQueryClient();
+  const sessionUser = getSessionUser();
+  const isAdmin = sessionUser?.role === 'Admin';
   const [billingCycle, setBillingCycle] = useState<'Monthly' | 'Yearly'>('Monthly');
   const [error, setError] = useState<string | null>(null);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
@@ -45,17 +49,49 @@ export function BillingPage() {
   const [paymentExpYear, setPaymentExpYear] = useState(new Date().getFullYear() + 2);
   const [paymentDefault, setPaymentDefault] = useState(true);
   const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [selectedOrgId, setSelectedOrgId] = useState<string>('');
 
   const plansQuery = useQuery({ queryKey: ['billing', 'plans'], queryFn: getPlans });
-  const summaryQuery = useQuery({ queryKey: ['billing', 'summary'], queryFn: getBillingSummary });
-  const invoicesQuery = useQuery({ queryKey: ['billing', 'invoices'], queryFn: getInvoices });
-  const paymentMethodsQuery = useQuery({ queryKey: ['billing', 'payment-methods'], queryFn: getPaymentMethods });
+  const organizationsQuery = useQuery({
+    queryKey: ['organizations', 'billing'],
+    queryFn: () => getOrganizations(false),
+    enabled: isAdmin,
+  });
+  const summaryQuery = useQuery({
+    queryKey: ['billing', 'summary', isAdmin ? selectedOrgId : 'self'],
+    queryFn: () => getBillingSummary(isAdmin ? selectedOrgId : undefined),
+    enabled: isAdmin ? Boolean(selectedOrgId) : true,
+  });
+  const invoicesQuery = useQuery({
+    queryKey: ['billing', 'invoices', isAdmin ? selectedOrgId : 'self'],
+    queryFn: () => getInvoices(isAdmin ? selectedOrgId : undefined),
+    enabled: isAdmin ? Boolean(selectedOrgId) : true,
+  });
+  const paymentMethodsQuery = useQuery({
+    queryKey: ['billing', 'payment-methods', isAdmin ? selectedOrgId : 'self'],
+    queryFn: () => getPaymentMethods(isAdmin ? selectedOrgId : undefined),
+    enabled: isAdmin ? Boolean(selectedOrgId) : true,
+  });
 
   const summary = summaryQuery.data;
   const plans = plansQuery.data ?? [];
 
   const currentPlanId = summary?.currentPlan.id ?? '';
-  const organizationId = summary?.organizationId ?? '';
+  const organizationId = (isAdmin ? selectedOrgId : summary?.organizationId) ?? '';
+  const organizationOptions = (organizationsQuery.data ?? []).map((org: Organization) => ({
+    label: org.name,
+    value: org.id,
+  }));
+
+  const availableOrgId = organizationId || summary?.organizationId || '';
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    if (selectedOrgId) return;
+    if (organizationsQuery.data?.length) {
+      setSelectedOrgId(organizationsQuery.data[0].id);
+    }
+  }, [isAdmin, organizationsQuery.data, selectedOrgId]);
 
   const selectMutation = useMutation({
     mutationFn: updateSubscription,
@@ -129,25 +165,32 @@ export function BillingPage() {
     try {
       const baseUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') ?? '';
       const token = getAccessToken();
-      const response = await fetch(`${baseUrl}/api/billing/invoices/${invoice.id}/download`, {
+      const params = new URLSearchParams();
+      if (isAdmin && selectedOrgId) {
+        params.set('organizationId', selectedOrgId);
+      }
+      const downloadUrl = params.toString()
+        ? `${baseUrl}/api/billing/invoices/${invoice.id}/download?${params.toString()}`
+        : `${baseUrl}/api/billing/invoices/${invoice.id}/download`;
+      const response = await fetch(downloadUrl, {
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       });
       if (!response.ok) {
         throw new Error(`Download failed (${response.status}).`);
       }
       const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
+      const blobUrl = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
-      link.href = url;
+      link.href = blobUrl;
       link.download = `${invoice.number}.txt`;
       document.body.appendChild(link);
       link.click();
       link.remove();
-      window.URL.revokeObjectURL(url);
+      window.URL.revokeObjectURL(blobUrl);
     } catch (err) {
       setError(parseError(err));
     }
-  }, []);
+  }, [isAdmin, selectedOrgId]);
 
   const invoiceColumns = useMemo(
     () => [
@@ -187,17 +230,34 @@ export function BillingPage() {
 
   return (
     <section className="page">
+      {isAdmin ? (
+        <div className="billing-org-banner">
+          <div className="billing-org-banner-text">
+            <div className="billing-org-banner-title">Organization billing</div>
+            <div className="billing-org-banner-subtitle">Choose the organization to manage billing, plans, and invoices.</div>
+          </div>
+          <Select
+            label="Organization"
+            value={selectedOrgId}
+            options={organizationOptions}
+            onChange={(event) => setSelectedOrgId(event.target.value)}
+          />
+        </div>
+      ) : null}
+
       <div className="billing-header">
         <div>
           <h1>Billing & plans</h1>
           <p>Plan selector, usage summary, and subscription status.</p>
         </div>
-        <Select
-          label="Billing cycle"
-          value={billingCycle}
-          options={billingCycleOptions}
-          onChange={(event) => setBillingCycle(event.target.value as 'Monthly' | 'Yearly')}
-        />
+        <div className="billing-controls">
+          <Select
+            label="Billing cycle"
+            value={billingCycle}
+            options={billingCycleOptions}
+            onChange={(event) => setBillingCycle(event.target.value as 'Monthly' | 'Yearly')}
+          />
+        </div>
       </div>
 
       {summaryQuery.isError ? (
@@ -261,10 +321,11 @@ export function BillingPage() {
               <Button
                 variant={isCurrent ? 'secondary' : 'primary'}
                 type="button"
-                disabled={!organizationId || selectMutation.isPending}
+                disabled={!availableOrgId || selectMutation.isPending}
                 onClick={() => {
                   setError(null);
-                  selectMutation.mutate({ organizationId, planId: plan.id, billingCycle });
+                  if (!availableOrgId) return;
+                  selectMutation.mutate({ organizationId: availableOrgId, planId: plan.id, billingCycle });
                 }}
               >
                 {isCurrent ? 'Current plan' : 'Select plan'}
@@ -403,12 +464,12 @@ export function BillingPage() {
           <div className="billing-form-actions">
             <Button
               type="button"
-              disabled={paymentMutation.isPending || !summary?.organizationId || paymentLast4.length !== 4}
+              disabled={paymentMutation.isPending || !availableOrgId || paymentLast4.length !== 4}
               onClick={() => {
-                if (!summary?.organizationId) return;
+                if (!availableOrgId) return;
                 setPaymentError(null);
                 paymentMutation.mutate({
-                  organizationId: summary.organizationId,
+                  organizationId: availableOrgId,
                   brand: paymentBrand.trim(),
                   last4: paymentLast4,
                   expMonth: paymentExpMonth,

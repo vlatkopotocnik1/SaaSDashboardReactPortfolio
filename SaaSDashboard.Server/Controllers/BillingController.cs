@@ -43,16 +43,16 @@ public class BillingController : ControllerBase
     }
 
     [HttpGet("summary")]
-    public async Task<ActionResult<BillingSummary>> GetSummary()
+    public async Task<ActionResult<BillingSummary>> GetSummary([FromQuery] Guid? organizationId = null)
     {
-        var organizationId = GetOrganizationId();
-        if (organizationId is null)
+        var resolvedOrgId = ResolveOrganizationId(organizationId);
+        if (resolvedOrgId is null)
         {
             return Unauthorized();
         }
 
         var organization = await _dbContext.Organizations.AsNoTracking()
-            .FirstOrDefaultAsync(org => org.Id == organizationId.Value);
+            .FirstOrDefaultAsync(org => org.Id == resolvedOrgId.Value);
 
         if (organization is null)
         {
@@ -97,8 +97,8 @@ public class BillingController : ControllerBase
     [HttpPost("subscribe")]
     public async Task<ActionResult<BillingSummary>> UpdateSubscription(SubscriptionRequest request)
     {
-        var organizationId = GetOrganizationId();
-        if (organizationId is null || request.OrganizationId != organizationId.Value)
+        var resolvedOrgId = ResolveOrganizationId(request.OrganizationId);
+        if (resolvedOrgId is null || request.OrganizationId != resolvedOrgId.Value)
         {
             return Unauthorized();
         }
@@ -138,20 +138,20 @@ public class BillingController : ControllerBase
 
         await _dbContext.SaveChangesAsync();
 
-        return await GetSummary();
+        return await GetSummary(request.OrganizationId);
     }
 
     [HttpGet("invoices")]
-    public async Task<ActionResult<IReadOnlyList<InvoiceSummary>>> GetInvoices()
+    public async Task<ActionResult<IReadOnlyList<InvoiceSummary>>> GetInvoices([FromQuery] Guid? organizationId = null)
     {
-        var organizationId = GetOrganizationId();
-        if (organizationId is null)
+        var resolvedOrgId = ResolveOrganizationId(organizationId);
+        if (resolvedOrgId is null)
         {
             return Unauthorized();
         }
 
         var invoices = await _dbContext.Invoices.AsNoTracking()
-            .Where(invoice => invoice.OrganizationId == organizationId.Value)
+            .Where(invoice => invoice.OrganizationId == resolvedOrgId.Value)
             .OrderByDescending(invoice => invoice.IssuedAt)
             .Select(invoice => new InvoiceSummary(
                 invoice.Id,
@@ -170,16 +170,16 @@ public class BillingController : ControllerBase
     }
 
     [HttpGet("payment-methods")]
-    public async Task<ActionResult<IReadOnlyList<PaymentMethodSummary>>> GetPaymentMethods()
+    public async Task<ActionResult<IReadOnlyList<PaymentMethodSummary>>> GetPaymentMethods([FromQuery] Guid? organizationId = null)
     {
-        var organizationId = GetOrganizationId();
-        if (organizationId is null)
+        var resolvedOrgId = ResolveOrganizationId(organizationId);
+        if (resolvedOrgId is null)
         {
             return Unauthorized();
         }
 
         var methods = await _dbContext.PaymentMethods.AsNoTracking()
-            .Where(method => method.OrganizationId == organizationId.Value)
+            .Where(method => method.OrganizationId == resolvedOrgId.Value)
             .OrderByDescending(method => method.IsDefault)
             .Select(method => new PaymentMethodSummary(
                 method.Id,
@@ -196,8 +196,8 @@ public class BillingController : ControllerBase
     [HttpPost("payment-methods")]
     public async Task<ActionResult<IReadOnlyList<PaymentMethodSummary>>> AddPaymentMethod(PaymentMethodRequest request)
     {
-        var organizationId = GetOrganizationId();
-        if (organizationId is null || request.OrganizationId != organizationId.Value)
+        var resolvedOrgId = ResolveOrganizationId(request.OrganizationId);
+        if (resolvedOrgId is null || request.OrganizationId != resolvedOrgId.Value)
         {
             return Unauthorized();
         }
@@ -251,16 +251,16 @@ public class BillingController : ControllerBase
     }
 
     [HttpGet("invoices/{id:guid}/download")]
-    public async Task<IActionResult> DownloadInvoice(Guid id)
+    public async Task<IActionResult> DownloadInvoice(Guid id, [FromQuery] Guid? organizationId = null)
     {
-        var organizationId = GetOrganizationId();
-        if (organizationId is null)
+        var resolvedOrgId = ResolveOrganizationId(organizationId);
+        if (resolvedOrgId is null)
         {
             return Unauthorized();
         }
 
         var invoice = await _dbContext.Invoices.AsNoTracking()
-            .FirstOrDefaultAsync(item => item.Id == id && item.OrganizationId == organizationId.Value);
+            .FirstOrDefaultAsync(item => item.Id == id && item.OrganizationId == resolvedOrgId.Value);
         if (invoice is null)
         {
             return NotFound();
@@ -285,6 +285,22 @@ public class BillingController : ControllerBase
         }
 
         return null;
+    }
+
+    private Guid? ResolveOrganizationId(Guid? requestedOrgId)
+    {
+        var tokenOrgId = GetOrganizationId();
+        if (requestedOrgId is null)
+        {
+            return tokenOrgId;
+        }
+
+        if (User.IsInRole("Admin"))
+        {
+            return requestedOrgId;
+        }
+
+        return tokenOrgId == requestedOrgId ? requestedOrgId : null;
     }
 }
 

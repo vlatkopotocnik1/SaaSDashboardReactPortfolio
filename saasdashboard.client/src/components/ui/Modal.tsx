@@ -21,7 +21,7 @@ export function Modal({ isOpen, title, onClose, actions, children }: ModalProps)
             Close
           </button>
         </div>
-        <div>{children}</div>
+        <div className="ui-modal-body">{children}</div>
         {actions ? <div className="ui-modal-actions">{actions}</div> : null}
       </div>
     </div>

@@ -100,13 +100,18 @@ function UserForm({ mode, defaultValues, isSaving, formError, roleOptions, organ
   }, [organizationId, organizations]);
 
   useEffect(() => {
-    if (!teamOptions.length) return;
+    if (!teamOptions.length) {
+      setValue('teamId', '');
+      return;
+    }
     if (!teamId || !teamOptions.some((option) => option.value === teamId)) {
       setValue('teamId', teamOptions[0].value);
     }
   }, [teamId, teamOptions, setValue]);
 
   const isBusy = isSubmitting || isSaving;
+  const hasTeams = teamOptions.length > 0;
+  const teamSelectOptions = hasTeams ? teamOptions : [{ label: 'No teams available', value: '' }];
 
   return (
     <form id={formId} className="users-form" onSubmit={handleSubmit(onSubmit)}>
@@ -131,8 +136,10 @@ function UserForm({ mode, defaultValues, isSaving, formError, roleOptions, organ
       />
       <Select
         label="Team"
-        options={teamOptions}
+        options={teamSelectOptions}
         error={errors.teamId?.message}
+        helperText={hasTeams ? undefined : 'Create a team for this organization first.'}
+        disabled={!hasTeams}
         {...register('teamId')}
       />
       <Input

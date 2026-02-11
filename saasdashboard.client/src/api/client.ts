@@ -66,7 +66,8 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}) 
       }
 
       if (!response.ok) {
-        const payload = await response.json().catch(() => undefined);
+        const payloadText = await response.text().catch(() => '');
+        const payload = payloadText ? JSON.parse(payloadText) : undefined;
         const error = new ApiError('Request failed', response.status, payload);
         if (attempt < retry && shouldRetry(response.status)) {
           await sleep(retryDelayMs * (attempt + 1));
@@ -79,7 +80,15 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}) 
         return undefined as T;
       }
 
-      return (await response.json()) as T;
+      const contentType = response.headers.get('content-type') ?? '';
+      const responseText = await response.text();
+      if (!responseText) {
+        return undefined as T;
+      }
+      if (!contentType.includes('application/json')) {
+        return responseText as T;
+      }
+      return JSON.parse(responseText) as T;
     } catch (error) {
       if (attempt < retry) {
         await sleep(retryDelayMs * (attempt + 1));

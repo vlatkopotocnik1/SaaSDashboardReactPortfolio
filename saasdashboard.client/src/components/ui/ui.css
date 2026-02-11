@@ -72,6 +72,7 @@
 
 .ui-modal {
   width: min(520px, 90vw);
+  max-height: 90vh;
   background: var(--color-surface);
   color: var(--color-text);
   border-radius: var(--radius-lg);
@@ -80,6 +81,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
+  overflow: hidden;
 }
 
 .ui-modal-header {
@@ -93,6 +95,15 @@
   display: flex;
   justify-content: flex-end;
   gap: var(--space-3);
+}
+
+.ui-modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
 }
 
 .ui-toast {

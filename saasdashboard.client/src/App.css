@@ -125,6 +125,38 @@
   gap: var(--space-3);
 }
 
+.audit-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.audit-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.audit-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-4);
+}
+
+.audit-summary {
+  display: flex;
+  justify-content: space-between;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+.audit-pagination {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
 .users-row-actions {
   display: flex;
   justify-content: flex-end;
@@ -312,7 +344,7 @@
 
 .roles-layout {
   display: grid;
-  grid-template-columns: 260px minmax(0, 1fr);
+  grid-template-columns: 1fr;
   gap: var(--space-5);
 }
 
@@ -320,24 +352,17 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  border-right: 1px solid var(--color-border);
-  padding-right: var(--space-4);
 }
 
 .role-item {
   text-align: left;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  padding: var(--space-3);
-  background: var(--color-surface);
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
   color: inherit;
   cursor: pointer;
   width: 100%;
-}
-
-.role-item--active {
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.2);
 }
 
 .role-item-title {
@@ -347,6 +372,41 @@
 .role-item-meta {
   font-size: 0.85rem;
   color: var(--color-text-muted);
+}
+
+.role-item-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  background: var(--color-surface);
+  transition: box-shadow 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.role-item-row > .role-item {
+  flex: 1;
+}
+
+.role-item-actions {
+  display: flex;
+  align-items: center;
+}
+
+.role-item-row:hover {
+  border-color: rgba(96, 165, 250, 0.35);
+}
+
+.role-item-row--active {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.2);
+}
+
+.role-item-actions .ui-button {
+  padding: 6px 10px;
+  font-size: 0.78rem;
+  border-radius: var(--radius-pill);
 }
 
 .roles-detail {
@@ -444,6 +504,43 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-4);
+}
+
+.billing-controls {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+.billing-org-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(37, 99, 235, 0.35);
+  background: rgba(37, 99, 235, 0.08);
+}
+
+.billing-org-banner-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.billing-org-banner-title {
+  font-weight: var(--font-weight-bold);
+  font-size: 1rem;
+}
+
+.billing-org-banner-subtitle {
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+.billing-org-banner .ui-field {
+  min-width: 260px;
 }
 
 .billing-status {
@@ -645,6 +742,12 @@
   font-size: 0.95rem;
   color: var(--color-text);
   background: var(--color-surface);
+}
+
+.login-hint {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
 }
 
 .public-layout {

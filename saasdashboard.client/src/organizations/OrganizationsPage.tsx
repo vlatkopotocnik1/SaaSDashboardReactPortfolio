@@ -35,6 +35,7 @@ export function OrganizationsPage() {
   const [teamName, setTeamName] = useState('');
   const [orgError, setOrgError] = useState<string | null>(null);
   const [teamError, setTeamError] = useState<string | null>(null);
+  const [orgToast, setOrgToast] = useState<string | null>(null);
 
   const organizationsQuery = useQuery({
     queryKey: ['organizations', 'withTeams'],
@@ -110,7 +111,11 @@ export function OrganizationsPage() {
       queryClient.invalidateQueries({ queryKey: ['organizations'] });
       setSelectedOrgId(null);
     },
-    onError: (error) => setOrgError(parseError(error)),
+    onError: (error) => {
+      const message = parseError(error);
+      setOrgError(message);
+      setOrgToast(message);
+    },
   });
 
   const createTeamMutation = useMutation({
@@ -202,6 +207,11 @@ export function OrganizationsPage() {
       {organizationsQuery.isError ? (
         <Toast title="Unable to load organizations" variant="error">
           <span>{parseError(organizationsQuery.error)}</span>
+        </Toast>
+      ) : null}
+      {orgToast ? (
+        <Toast title="Action failed" variant="error" onClose={() => setOrgToast(null)}>
+          <span>{orgToast}</span>
         </Toast>
       ) : null}
 

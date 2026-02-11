@@ -137,6 +137,7 @@ public class UsersController : ControllerBase
         user.PasswordHash = _passwordHasher.HashPassword(user, request.Password);
 
         _dbContext.Users.Add(user);
+        AddAuditLog(user.OrganizationId, $"Created user {user.Username}");
         await _dbContext.SaveChangesAsync();
 
         var orgName = await _dbContext.Organizations
@@ -205,6 +206,7 @@ public class UsersController : ControllerBase
             user.PasswordHash = _passwordHasher.HashPassword(user, request.Password);
         }
 
+        AddAuditLog(user.OrganizationId, $"Updated user {user.Username}");
         await _dbContext.SaveChangesAsync();
 
         var orgName = await _dbContext.Organizations
@@ -228,7 +230,10 @@ public class UsersController : ControllerBase
             return NotFound();
         }
 
+        var orgId = user.OrganizationId;
+        var username = user.Username;
         _dbContext.Users.Remove(user);
+        AddAuditLog(orgId, $"Deleted user {username}");
         await _dbContext.SaveChangesAsync();
         return NoContent();
     }
@@ -311,6 +316,26 @@ public class UsersController : ControllerBase
         }
 
         return null;
+    }
+
+    private void AddAuditLog(Guid organizationId, string action)
+    {
+        var actorId = GetActorId();
+        var actorName = User.FindFirst("username")?.Value ?? "system";
+        _dbContext.AuditLogs.Add(new AuditLog
+        {
+            OrganizationId = organizationId,
+            UserId = actorId,
+            Username = actorName,
+            Action = action,
+            CreatedAt = DateTimeOffset.UtcNow
+        });
+    }
+
+    private Guid? GetActorId()
+    {
+        var value = User.FindFirst("sub")?.Value;
+        return Guid.TryParse(value, out var id) ? id : null;
     }
 }
 

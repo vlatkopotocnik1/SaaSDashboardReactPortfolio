@@ -16,6 +16,7 @@ public class AppDbContext : DbContext
     public DbSet<Subscription> Subscriptions => Set<Subscription>();
     public DbSet<Invoice> Invoices => Set<Invoice>();
     public DbSet<PaymentMethod> PaymentMethods => Set<PaymentMethod>();
+    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options)
     {
@@ -48,6 +49,14 @@ public class AppDbContext : DbContext
             .HasIndex(plan => plan.Name)
             .IsUnique();
 
+        modelBuilder.Entity<Plan>()
+            .Property(plan => plan.PriceMonthly)
+            .HasPrecision(18, 2);
+
+        modelBuilder.Entity<Plan>()
+            .Property(plan => plan.PriceYearly)
+            .HasPrecision(18, 2);
+
         modelBuilder.Entity<Subscription>()
             .HasIndex(subscription => subscription.OrganizationId)
             .IsUnique();
@@ -68,6 +77,10 @@ public class AppDbContext : DbContext
             .HasIndex(invoice => invoice.OrganizationId);
 
         modelBuilder.Entity<Invoice>()
+            .Property(invoice => invoice.Amount)
+            .HasPrecision(18, 2);
+
+        modelBuilder.Entity<Invoice>()
             .HasOne(invoice => invoice.Organization)
             .WithMany()
             .HasForeignKey(invoice => invoice.OrganizationId)
@@ -81,6 +94,24 @@ public class AppDbContext : DbContext
             .WithMany()
             .HasForeignKey(method => method.OrganizationId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<AuditLog>()
+            .HasIndex(log => log.OrganizationId);
+
+        modelBuilder.Entity<AuditLog>()
+            .HasIndex(log => log.CreatedAt);
+
+        modelBuilder.Entity<AuditLog>()
+            .HasOne(log => log.Organization)
+            .WithMany()
+            .HasForeignKey(log => log.OrganizationId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<AuditLog>()
+            .HasOne(log => log.User)
+            .WithMany()
+            .HasForeignKey(log => log.UserId)
+            .OnDelete(DeleteBehavior.SetNull);
 
         modelBuilder.Entity<Organization>()
             .HasIndex(org => org.Name)

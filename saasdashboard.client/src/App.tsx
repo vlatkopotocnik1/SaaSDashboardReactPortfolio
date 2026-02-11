@@ -12,11 +12,13 @@ import {
 } from 'react-router-dom';
 import { ThemeProvider, useTheme } from './theme';
 import { login as loginApi, logout as logoutApi } from './auth/api';
+import { ApiError } from './api/client';
 import { getRefreshToken, getSessionUser, onSessionChange, refreshSession } from './auth/session';
 import { UsersPage } from './users/UsersPage';
 import { OrganizationsPage } from './organizations/OrganizationsPage';
 import { RolesPage } from './roles/RolesPage';
 import { BillingPage } from './billing/BillingPage';
+import { AuditPage } from './audit/AuditPage';
 
 type AuthUser = {
   username: string;
@@ -85,6 +87,7 @@ const routeLabels: Record<string, string> = {
   '/users': 'Users',
   '/organizations': 'Organizations',
   '/roles': 'Roles',
+  '/audit': 'Audit logs',
   '/billing': 'Billing',
   '/settings': 'Settings',
   '/login': 'Login',
@@ -128,6 +131,7 @@ function Sidebar() {
     { to: '/users', label: 'Users', roles: ['Admin'] },
     { to: '/organizations', label: 'Organizations', roles: ['Admin'] },
     { to: '/roles', label: 'Roles', roles: ['Admin'] },
+    { to: '/audit', label: 'Audit logs', roles: ['Admin'] },
     { to: '/billing', label: 'Billing' },
     { to: '/settings', label: 'Settings' },
   ];
@@ -269,10 +273,14 @@ function LoginPage() {
   const handleLogin = async (username: string, password: string) => {
     setError(null);
     try {
-      await login(username, password);
+      await login(username.trim(), password);
       navigate(fallbackPath, { replace: true });
-    } catch {
-      setError('Login failed. Check credentials and try again.');
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        setError('Invalid username or password.');
+      } else {
+        setError('Login failed. Check credentials and try again.');
+      }
     }
   };
 
@@ -298,6 +306,7 @@ function LoginPage() {
           <span>Password</span>
           <input name="password" type="password" placeholder="•••••••" required />
         </label>
+        <p className="login-hint">Demo credentials: admin / admin, user / user</p>
         <button className="primary-button" type="submit">
           Continue
         </button>
@@ -328,6 +337,7 @@ function App() {
                 <Route path="users" element={<UsersPage />} />
                 <Route path="organizations" element={<OrganizationsPage />} />
                 <Route path="roles" element={<RolesPage />} />
+                <Route path="audit" element={<AuditPage />} />
               </Route>
               <Route path="billing" element={<BillingPage />} />
               <Route path="settings" element={<SettingsPage />} />

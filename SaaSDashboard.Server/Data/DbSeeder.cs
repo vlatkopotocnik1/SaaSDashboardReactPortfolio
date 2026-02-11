@@ -8,6 +8,8 @@ public static class DbSeeder
 {
     public static async Task EnsureSeededAsync(AppDbContext dbContext)
     {
+        await EnsureAuditLogsTableAsync(dbContext);
+
         var permissions = await EnsurePermissionsAsync(dbContext);
         var adminRole = await EnsureRoleAsync(dbContext, "Admin", "Full access to the workspace.", permissions);
         var userRole = await EnsureRoleAsync(dbContext, "User", "Standard workspace access.", permissions
@@ -24,8 +26,9 @@ public static class DbSeeder
         await EnsurePaymentMethodsAsync(dbContext, org);
         await EnsureInvoicesAsync(dbContext, org);
 
-        await EnsureUserAsync(dbContext, hasher, "admin", adminRole.Name, "admin", org, platformTeam);
-        await EnsureUserAsync(dbContext, hasher, "user", userRole.Name, "user", org, salesTeam);
+        var adminUser = await EnsureUserAsync(dbContext, hasher, "admin", adminRole.Name, "admin", org, platformTeam);
+        var regularUser = await EnsureUserAsync(dbContext, hasher, "user", userRole.Name, "user", org, salesTeam);
+        await EnsureAuditLogsAsync(dbContext, org, adminUser, regularUser);
         await dbContext.SaveChangesAsync();
     }
 
@@ -253,7 +256,7 @@ public static class DbSeeder
         return team;
     }
 
-    private static async Task EnsureUserAsync(
+    private static async Task<AuthUser> EnsureUserAsync(
         AppDbContext dbContext,
         PasswordHasher<AuthUser> hasher,
         string username,
@@ -273,5 +276,78 @@ public static class DbSeeder
         user.OrganizationId = organization.Id;
         user.TeamId = team.Id;
         user.PasswordHash = hasher.HashPassword(user, password);
+        return user;
+    }
+
+    private static async Task EnsureAuditLogsAsync(
+        AppDbContext dbContext,
+        Organization organization,
+        AuthUser adminUser,
+        AuthUser regularUser)
+    {
+        var existing = await dbContext.AuditLogs.AnyAsync(item => item.OrganizationId == organization.Id);
+        if (existing)
+        {
+            return;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        dbContext.AuditLogs.AddRange(
+            new AuditLog
+            {
+                OrganizationId = organization.Id,
+                UserId = adminUser.Id,
+                Username = adminUser.Username,
+                Action = "Created organization",
+                CreatedAt = now.AddDays(-3)
+            },
+            new AuditLog
+            {
+                OrganizationId = organization.Id,
+                UserId = adminUser.Id,
+                Username = adminUser.Username,
+                Action = "Updated billing plan to Growth",
+                CreatedAt = now.AddDays(-2)
+            },
+            new AuditLog
+            {
+                OrganizationId = organization.Id,
+                UserId = regularUser.Id,
+                Username = regularUser.Username,
+                Action = "Viewed invoice history",
+                CreatedAt = now.AddDays(-1).AddHours(-2)
+            },
+            new AuditLog
+            {
+                OrganizationId = organization.Id,
+                UserId = adminUser.Id,
+                Username = adminUser.Username,
+                Action = "Created team Platform",
+                CreatedAt = now.AddHours(-6)
+            });
+    }
+
+    private static async Task EnsureAuditLogsTableAsync(AppDbContext dbContext)
+    {
+        const string sql = """
+            IF OBJECT_ID(N'[AuditLogs]', N'U') IS NULL
+            BEGIN
+                CREATE TABLE [AuditLogs] (
+                    [Id] uniqueidentifier NOT NULL,
+                    [OrganizationId] uniqueidentifier NOT NULL,
+                    [UserId] uniqueidentifier NULL,
+                    [Username] nvarchar(128) NOT NULL,
+                    [Action] nvarchar(256) NOT NULL,
+                    [CreatedAt] datetimeoffset NOT NULL,
+                    CONSTRAINT [PK_AuditLogs] PRIMARY KEY ([Id]),
+                    CONSTRAINT [FK_AuditLogs_Organizations_OrganizationId] FOREIGN KEY ([OrganizationId]) REFERENCES [Organizations]([Id]) ON DELETE CASCADE,
+                    CONSTRAINT [FK_AuditLogs_Users_UserId] FOREIGN KEY ([UserId]) REFERENCES [Users]([Id]) ON DELETE SET NULL
+                );
+                CREATE INDEX [IX_AuditLogs_OrganizationId] ON [AuditLogs]([OrganizationId]);
+                CREATE INDEX [IX_AuditLogs_CreatedAt] ON [AuditLogs]([CreatedAt]);
+            END
+            """;
+
+        await dbContext.Database.ExecuteSqlRawAsync(sql);
     }
 }
